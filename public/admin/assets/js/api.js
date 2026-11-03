@@ -2,7 +2,7 @@
   'use strict';
   const SESSION_KEY = 'zenjigo_admin_session';
   const cfg = window.ZENJIGO_ADMIN_CONFIG || {};
-  const base = (cfg.apiBase || localStorage.getItem('zenjigo-api-url') || 'http://localhost:5000/api/v1').replace(/\/$/, '');
+  const base = 'https://api.zenjigo.online/api/v1';
 
   function session() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }

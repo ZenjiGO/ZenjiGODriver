@@ -32,12 +32,20 @@ class _HomeScreenState extends State<HomeScreen> {
         _promptSpecificRequest(req);
       };
       if (state.online) state.startRidePolling();
+      _resumeActiveRide(state);
     });
     _requestTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       final state = AppScope.of(context);
       if (state.online && !_prompting) _showRideRequest();
     });
+  }
+
+  /// App was restarted / reinstalled while a ride was unfinished: put the driver straight back into it.
+  Future<void> _resumeActiveRide(AppState state) async {
+    final id = await state.syncActiveRide();
+    if (!mounted || id == null) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ActiveRideScreen(rideId: id)));
   }
 
   Future<void> _promptSpecificRequest(Map<String, dynamic> request) async {

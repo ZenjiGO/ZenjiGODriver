@@ -252,7 +252,19 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
         _fitOverview();
       }
       _afterRideUpdate(prevStatus, prevReached);
-    } catch (_) {
+    } catch (e) {
+      // 404: the ride is no longer assigned to this driver (support reassigned it, or the rider's request moved on).
+      if (mounted && !_finished && _errorText(e).toLowerCase().contains('not found')) {
+        _finished = true;
+        _app.setActiveRideId(null);
+        await _showMessage(
+          icon: Icons.info_rounded,
+          color: Colors.orange,
+          title: t('Ride reassigned', 'Safari imehamishiwa'),
+          message: t('This ride is no longer assigned to you.', 'Safari hii haipo tena kwako.'),
+        );
+        if (mounted) Navigator.of(context).pop();
+      }
     } finally {
       _loadingRide = false;
     }
@@ -560,7 +572,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     final yes = await confirmDialog(
       context,
       title: t('Cancel this ride?', 'Ghairi safari hii?'),
-      message: t('Only cancel if you cannot safely complete the trip.', 'Ghairi tu ikiwa huwezi kukamilisha safari kwa usalama.'),
+      message: t('Only cancel if you cannot complete the trip. The rider will be matched with another driver.', 'Ghairi tu ikiwa huwezi kukamilisha safari. Abiria atatafutiwa dereva mwingine.'),
       confirm: t('Cancel ride', 'Ghairi safari'),
     );
     if (yes != true || !mounted) return;
@@ -582,7 +594,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
       icon: Icons.cancel_rounded,
       color: Colors.red,
       title: t('Ride cancelled', 'Safari imeghairiwa'),
-      message: t('The rider cancelled this ride.', 'Abiria ameghairi safari hii.'),
+      message: (_ride?['cancel_reason'] ?? '').toString().trim().isNotEmpty
+          ? (_ride!['cancel_reason']).toString()
+          : t('This ride was cancelled.', 'Safari hii imeghairiwa.'),
     );
     _app.refreshFinance();
     if (mounted) Navigator.of(context).pop();

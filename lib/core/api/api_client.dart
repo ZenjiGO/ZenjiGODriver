@@ -13,7 +13,7 @@ class ApiClient {
   /// Physical device → your PC LAN IP (same Wi‑Fi), e.g. http://192.168.x.x:5000/api/v1
   static const baseUrl = String.fromEnvironment(
     'ZENJIGO_API_URL',
-    defaultValue: 'https://zenjigo-backend.onrender.com/api/v1',
+    defaultValue: 'https://api.zenjigo.online/api/v1',
   );
 
   static const Duration requestTimeout = Duration(seconds: 25);

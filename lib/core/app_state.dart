@@ -37,6 +37,8 @@ class AppState extends ChangeNotifier {
         await refreshProfile();
         await refreshFinance();
         await refreshUnreadMessages();
+        await syncActiveRide();
+        if (online) startRidePolling();
       } catch (_) {
         authenticated = false;
         await ApiClient.clear();
@@ -59,6 +61,29 @@ class AppState extends ChangeNotifier {
     refreshProfile();
     refreshFinance();
     refreshUnreadMessages();
+    syncActiveRide();
+  }
+
+  /// Asks the server whether this driver still has an unfinished ride (app restart / new phone / admin changes)
+  /// and keeps [activeRideId] in step with it. Returns the active ride id, or null.
+  Future<String?> syncActiveRide() async {
+    if (!authenticated) return null;
+    try {
+      final r = await DriverApi.activeRide();
+      final id = r == null ? null : '${r['id']}';
+      if (id != activeRideId) {
+        activeRideId = id;
+        notifyListeners();
+        if (id != null) {
+          BackgroundLocationService.instance.restart(isSwahili: isSwahili, activeRideId: id);
+        } else if (!online) {
+          BackgroundLocationService.instance.stop();
+        }
+      }
+      return id;
+    } catch (_) {
+      return activeRideId; // offline: keep what we know
+    }
   }
 
   Future<void> logout() async {
@@ -123,10 +148,18 @@ class AppState extends ChangeNotifier {
   }
 
   bool _pollingRides = false;
+  DateTime _lastSync = DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> _pollRides() async {
     if (!online || !authenticated || _pollingRides) return;
-    if (activeRideId != null) return; // busy with a ride: don't surface new requests
+    if (activeRideId != null) {
+      // Busy with a ride: don't surface new requests, but make sure the ride still really is ours.
+      if (DateTime.now().difference(_lastSync).inSeconds >= 30) {
+        _lastSync = DateTime.now();
+        await syncActiveRide();
+      }
+      return;
+    }
     _pollingRides = true;
     try {
       final result = await DriverApi.requests();

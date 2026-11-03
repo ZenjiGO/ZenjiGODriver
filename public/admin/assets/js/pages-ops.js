@@ -22,7 +22,7 @@
       const attention = [
         ['Driver applications', q.driverApplications, 'drivers', 'id', 'warm'], ['Documents to review', q.documents, 'documents', 'fileCheck', 'warm'],
         ['Driver change requests', q.changeRequests, 'requests', 'inbox', 'warm'], ['Payout requests', q.payouts, 'withdrawals', 'cash', 'warm'],
-        ['Payments awaiting confirmation', q.payments, 'finance', 'card', 'warm'], ['Open safety reports', q.reports, 'reports', 'flag', 'hot'],
+        ['Payments awaiting confirmation', q.payments, 'finance', 'card', 'warm'], ['Open safety reports', q.reports, 'reports', 'flag', 'hot'], ['Rides needing attention', q.ridesAttention || 0, 'rides', 'alert', 'hot'],
         ['Unread support messages', q.supportUnread, 'support', 'chat', 'warm'], ['Documents expiring ≤30 days', q.expiringDocuments, 'documents', 'clock', 'warm'],
         ['Drivers blocked for unpaid commission', q.blockedDrivers, 'finance', 'ban', 'hot'], ['Parcels awaiting a driver', q.parcels, 'parcels', 'package', 'warm'],
         ['Tour bookings to assign', q.tourBookings, 'tours', 'compass', 'warm']
@@ -64,7 +64,7 @@
       const steps = [['Requested', r.requested_at || r.created_at], ['Accepted', r.accepted_at], ['Arrived', r.arrived_at], ['Started', r.started_at], ['Completed', r.completed_at], ['Cancelled', r.cancelled_at]].filter((s) => s[1]);
       const fare = Number(r.final_fare ?? r.estimated_fare ?? 0);
       let pinShown = false;
-      h.body(html`<div class="row wrap" style="gap:8px;margin-bottom:14px">${Z.badge(r.status)}${typeBadge(r.ride_type)}<span class="badge nodot">${F.title(r.payment_method)}</span>${r.promo_code ? html`<span class="badge nodot badge-violet">Promo ${r.promo_code}</span>` : ''}</div>
+      h.body(html`${r.needs_attention ? html`<div class="banner danger" style="margin-bottom:14px">${ico('alert')}<div><b>Needs attention</b><span>${r.attention_reason || 'Flagged by the system for review.'}</span></div></div>` : ''}<div class="row wrap" style="gap:8px;margin-bottom:14px">${Z.badge(r.status)}${typeBadge(r.ride_type)}<span class="badge nodot">${F.title(r.payment_method)}</span>${r.promo_code ? html`<span class="badge nodot badge-violet">Promo ${r.promo_code}</span>` : ''}</div>
         ${r.status === 'cancelled' && r.cancel_reason ? html`<div class="banner danger" style="margin-bottom:14px">${ico('xCircle')}<div><b>Cancelled</b><span>${r.cancel_reason}</span></div></div>` : ''}
         <div class="section-title">Route</div><div class="route"><div><b>${r.pickup_address}</b><small>Pickup · ${Number(r.pickup_lat).toFixed(5)}, ${Number(r.pickup_lng).toFixed(5)}</small></div><div class="to"><b>${r.destination_address}</b><small>Destination · ${Number(r.destination_lat).toFixed(5)}, ${Number(r.destination_lng).toFixed(5)}</small></div></div>
         <div class="section-title">People</div>
@@ -75,6 +75,20 @@
         <div class="section-title">Trip PIN</div><div class="row"><span class="mono" id="pinVal" style="font-size:16px;letter-spacing:.2em">••••</span><button class="btn btn-sm" id="pinBtn">${ico('eye')} Reveal</button><span class="faint" style="font-size:12px">Share only with the rider or driver if they ask support.</span></div>
         <div class="section-title">Timeline</div><ul class="timeline">${steps.map(([l, t]) => html`<li class="${l === 'Cancelled' ? 'bad' : ''}"><b>${l}</b><small>${F.dt(t)}</small></li>`)}</ul>
         ${events.length ? html`<div class="section-title">System events</div><ul class="timeline">${events.map((e) => { const p = Z.parseJson(e.payload); return html`<li class="muted"><b>${F.title(e.event_type)}</b><small>${F.dt(e.created_at)}${p && p.status ? ' · ' + p.status : ''}</small></li>`; })}</ul>` : ''}`);
+      // ---- support interventions -------------------------------------------------------------------------
+      const live = ['searching', 'accepted', 'arriving', 'arrived', 'started'].includes(r.status);
+      const run = async (btn, call, okMsg) => { try { await Z.busy(btn, call); Z.toast(okMsg); h.close(); Z.reloadPage(); } catch (e) { Z.toast(e.message, 'error'); } };
+      if (live || r.needs_attention) {
+        h.foot(html`${r.needs_attention ? html`<button class="btn" id="rDismiss">${ico('checkCircle')} Mark handled</button>` : ''}
+          ${['accepted', 'arriving', 'arrived'].includes(r.status) ? html`<button class="btn" id="rRedispatch">${ico('refresh')} Find another driver</button>` : ''}
+          ${r.status === 'started' ? html`<button class="btn" id="rComplete">${ico('checkCircle')} Mark completed</button>` : ''}
+          ${live ? html`<button class="btn btn-danger" id="rCancel">${ico('xCircle')} Cancel ride</button>` : ''}`);
+        const on = (id, fn) => { const b = $(id, h.el); if (b) b.addEventListener('click', () => fn(b)); };
+        on('#rDismiss', (b) => run(b, () => Z.api.post(`/admin/rides/${id}/dismiss-flag`, {}), 'Marked as handled.'));
+        on('#rRedispatch', async (b) => { const c = await Z.confirm({ title: 'Find another driver?', message: 'The current driver is released and the rider goes back to searching.', confirmLabel: 'Return to search' }); if (c) run(b, () => Z.api.post(`/admin/rides/${id}/redispatch`, {}), 'Ride returned to search.'); });
+        on('#rComplete', async (b) => { const c = await Z.confirm({ title: 'Complete this trip manually?', message: 'Use this only when the trip really happened (for example the driver confirmed the cash by phone). The driver earning and commission are recorded as cash.', confirmLabel: 'Mark completed', tone: 'ok', reason: { label: 'Why are you completing it?', required: true, placeholder: 'e.g. Driver and rider both confirmed cash was paid' } }); if (c) run(b, () => Z.api.post(`/admin/rides/${id}/complete`, { reason: c.reason, method: 'cash' }), 'Ride completed.'); });
+        on('#rCancel', async (b) => { const c = await Z.confirm({ title: 'Cancel this ride?', message: 'Both rider and driver are notified. No cancellation fee is charged.', confirmLabel: 'Cancel ride', tone: 'danger', reason: { label: 'Reason (shown to the rider)', required: true, presets: ['Rider requested cancellation via support', 'Driver unreachable', 'Duplicate request'] } }); if (c) run(b, () => Z.api.post(`/admin/rides/${id}/cancel`, { reason: c.reason }), 'Ride cancelled.'); });
+      }
       $('#pinBtn', h.el).addEventListener('click', (ev) => { pinShown = !pinShown; $('#pinVal', h.el).textContent = pinShown ? r.trip_pin : '••••'; ev.currentTarget.lastChild.textContent = pinShown ? ' Hide' : ' Reveal'; });
     } catch (e) { h.body(Z.errorBlock(e)); }
   };
@@ -82,10 +96,11 @@
     title: 'Rides', subtitle: 'Every ride request on the platform',
     async render(ctx) {
       const load = async (fresh) => get('/admin/rides', { fresh });
-      const rows = await load(); if (!ctx.alive()) return;
+      const [rows, attn] = await Promise.all([load(), get('/admin/rides/attention', { fresh: true }).catch(() => [])]); if (!ctx.alive()) return;
+      const attnIds = new Set(attn.map((a) => String(a.id)));
       const t = new Z.Table({
         rows, exportName: 'rides', search: (r) => `${r.ride_code} ${r.riderName} ${r.driverName || ''} ${r.pickup_address} ${r.destination_address}`, searchPlaceholder: 'Search code, rider, driver, place…',
-        tabs: [{ key: 'all', label: 'All' }, { key: 'live', label: 'In progress', fn: (r) => ['searching', 'accepted', 'arriving', 'arrived', 'started'].includes(r.status) }, { key: 'done', label: 'Completed', fn: (r) => r.status === 'completed' }, { key: 'cx', label: 'Cancelled', fn: (r) => r.status === 'cancelled' }],
+        tabs: [{ key: 'all', label: 'All' }, { key: 'attn', label: `Needs attention${attnIds.size ? ' (' + attnIds.size + ')' : ''}`, fn: (r) => attnIds.has(String(r.id)) || Number(r.needs_attention) === 1 }, { key: 'live', label: 'In progress', fn: (r) => ['searching', 'accepted', 'arriving', 'arrived', 'started'].includes(r.status) }, { key: 'done', label: 'Completed', fn: (r) => r.status === 'completed' }, { key: 'cx', label: 'Cancelled', fn: (r) => r.status === 'cancelled' }],
         filters: [{ key: 'type', label: 'Vehicle', options: ['boda', 'bajaji', 'taxi'], fn: (r, v) => r.ride_type === v }, { key: 'pay', label: 'Payment', options: ['cash', 'wallet', 'momo', 'bank', 'card'], fn: (r, v) => r.payment_method === v }],
         defaultSort: { key: 'created', dir: 'desc' }, onRow: (r) => Z.openRide(r.id), onRefresh: async () => { t.setRows(await load(true)); Z.toast('Rides refreshed.'); },
         columns: [
@@ -136,7 +151,7 @@
       try { G = await loadGoogleMaps(); } catch (e) { setHtml($('#map', ctx.el), html`<div class="empty"><div class="ring">${ico('pin')}</div><h4>Map unavailable</h4><p>${e.message} The lists on the right still update.</p></div>`); }
       if (!ctx.alive()) return;
       if (G) {
-        map = new G.Map($('#map', ctx.el), { center: { lat: -6.165, lng: 39.2 }, zoom: 11, mapTypeControl: false, streetViewControl: false, fullscreenControl: true, clickableIcons: false });
+        map = new G.Map($('#map', ctx.el), { center: { lat: -6.165, lng: 39.2 }, zoom: 11, mapTypeControl: false, streetViewControl: false, fullscreenControl: true, clickableIcons: false, styles: [{"elementType":"geometry","stylers":[{"color":"#f6efe2"}]},{"elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"elementType":"labels.text.fill","stylers":[{"color":"#6b5a45"}]},{"elementType":"labels.text.stroke","stylers":[{"color":"#fffaf0"},{"weight":3}]},{"featureType":"administrative.land_parcel","stylers":[{"visibility":"off"}]},{"featureType":"administrative.neighborhood","stylers":[{"visibility":"off"}]},{"featureType":"administrative.locality","elementType":"labels.text.fill","stylers":[{"color":"#0f6f7c"}]},{"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"#efe5cf"}]},{"featureType":"landscape.man_made","elementType":"geometry","stylers":[{"color":"#f1e7d4"}]},{"featureType":"poi","stylers":[{"visibility":"off"}]},{"featureType":"poi.park","elementType":"geometry","stylers":[{"visibility":"on"},{"color":"#cfe7c9"}]},{"featureType":"poi.park","elementType":"labels","stylers":[{"visibility":"off"}]},{"featureType":"poi.attraction","elementType":"labels.text","stylers":[{"visibility":"on"}]},{"featureType":"road","elementType":"geometry","stylers":[{"color":"#ffffff"}]},{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#eadfc6"}]},{"featureType":"road.local","elementType":"labels","stylers":[{"visibility":"simplified"}]},{"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#fffdf8"}]},{"featureType":"road.arterial","elementType":"geometry.stroke","stylers":[{"color":"#e6d7b8"}]},{"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#ffd9a3"}]},{"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#f2b66b"}]},{"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#9a6420"}]},{"featureType":"transit","stylers":[{"visibility":"off"}]},{"featureType":"water","elementType":"geometry","stylers":[{"color":"#7fd3dc"}]},{"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#2a7d8b"}]},{"featureType":"water","elementType":"labels.text.stroke","stylers":[{"color":"#d9f4f6"}]}] });
         info = new G.InfoWindow();
       }
       const dot = (c) => ({ path: G.SymbolPath.CIRCLE, scale: 8, fillColor: c, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 3 });

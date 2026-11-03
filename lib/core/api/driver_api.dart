@@ -144,12 +144,20 @@ class DriverApi {
   }
 
   /// Changes the ride status. `otp` is the rider's 4-digit PIN and is required for `started`.
-  static Future<Map<String, dynamic>> status(String id, String status, {String? otp}) async {
+  static Future<Map<String, dynamic>> status(String id, String status, {String? otp, String? reason}) async {
     final d = await ApiClient.data('PATCH', '/driver/rides/$id/status', body: {
       'status': status,
       if (otp != null && otp.isNotEmpty) 'otp': otp,
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
     });
     return Map<String, dynamic>.from(d is Map ? d : {});
+  }
+
+  /// The driver's unfinished ride (accepted … started), or null. Used to resume after an app restart.
+  static Future<Map<String, dynamic>?> activeRide() async {
+    final d = await ApiClient.data('GET', '/driver/rides/active');
+    final r = d is Map ? d['ride'] : null;
+    return r is Map ? Map<String, dynamic>.from(r) : null;
   }
 
   /// Full live ride (rider name/phone, coordinates, payment state, earnings once completed).
