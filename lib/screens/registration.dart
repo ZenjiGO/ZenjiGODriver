@@ -412,17 +412,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       // Persist auth session from registration response so profile/photo work immediately
       if (result['accessToken'] != null || result['access_token'] != null) {
         await AppScope.of(context).login(result);
-      } else if (id != null && emailController.text.trim().isNotEmpty) {
-        try {
-          final session = await DriverApi.bootstrapSession(
-            driverId: id.toString(),
-            email: emailController.text.trim(),
-          );
-          if (session['accessToken'] != null) {
-            await AppScope.of(context).login(session);
-          }
-        } catch (_) {}
       }
+      // No OTP-less session fallback: if the server did not return tokens, the driver signs in
+      // with an email OTP from the login screen.
       if(!mounted)return;
       toast(context,AppScope.of(context).t('Application submitted successfully.','Ombi limetumwa kwa mafanikio.'));
       if(!mounted)return;
@@ -804,10 +796,8 @@ class _ApplicationTrackingScreenState extends State<ApplicationTrackingScreen> {
       if (token == null || token.isEmpty) {
         final id = widget.driverId;
         final email = widget.email ?? appState.profile?['email']?.toString();
-        if (id != null && email != null && email.toString().isNotEmpty) {
-          final session = await DriverApi.bootstrapSession(driverId: id, email: email.toString());
-          await appState.login(session);
-        }
+        // Sessions can only be created with email-OTP proof (see DriverLoginScreen).
+        throw Exception('Please sign in with the verification code sent to your email.');
       } else {
         // Refresh profile with existing token so UI is not offline/empty
         await appState.refreshProfile();

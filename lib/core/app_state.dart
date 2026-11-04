@@ -1,3 +1,4 @@
+import 'storage/secure_token_store.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,7 +28,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _restore() async {
     final p = await SharedPreferences.getInstance();
-    authenticated = p.getString('accessToken')?.isNotEmpty == true;
+    authenticated = (await SecureTokenStore.accessToken)?.isNotEmpty == true;
     isSwahili = p.getBool('isSwahili') ?? false;
     final theme = p.getString('themeMode');
     if (theme == 'light') themeMode = ThemeMode.light;
@@ -88,8 +89,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final rt = prefs.getString('refreshToken');
+      final rt = await SecureTokenStore.refreshToken;
       if (rt != null) {
         await ApiClient.request('POST', '/auth/logout', body: {'refreshToken': rt}, auth: false);
       }

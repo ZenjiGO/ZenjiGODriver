@@ -1,9 +1,9 @@
 import 'package:zenjigodriver/core/friendly_errors.dart';
 import 'dart:async';
 import 'dart:convert';
+import '../storage/secure_token_store.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   /// Default targets the host from an Android emulator. Override at build time:
@@ -27,13 +27,11 @@ class ApiClient {
   static Future<String?> get accessToken async => _token();
 
   static Future<String?> _token() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('accessToken');
+    return SecureTokenStore.accessToken;
   }
 
   static Future<String?> _refreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('refreshToken');
+    return SecureTokenStore.refreshToken;
   }
 
   static Exception _mapNetworkError(Object e) {
@@ -162,17 +160,13 @@ class ApiClient {
   }
 
   static Future<void> save(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
     final access = data['accessToken'] ?? data['access_token'];
     final refresh = data['refreshToken'] ?? data['refresh_token'];
-    if (access != null) await prefs.setString('accessToken', access.toString());
-    if (refresh != null) await prefs.setString('refreshToken', refresh.toString());
+    await SecureTokenStore.save(access: access?.toString(), refresh: refresh?.toString());
   }
 
   static Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('accessToken');
-    await prefs.remove('refreshToken');
+    await SecureTokenStore.clear();
   }
 
   /// Returns the unwrapped `data` field from a successful API response.

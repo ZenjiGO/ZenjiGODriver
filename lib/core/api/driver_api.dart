@@ -307,7 +307,8 @@ class DriverApi {
 
   
   static Future<Map<String, dynamic>> applicationStatus(String driverId) async {
-    final d = await ApiClient.data('GET', '/driver/application-status/$driverId', auth: false);
+    // Authenticated + server-side ownership check: a driver can only read their own application.
+    final d = await ApiClient.data('GET', '/driver/application-status');
     return Map<String, dynamic>.from(d is Map ? d : {});
   }
 
@@ -394,14 +395,17 @@ class DriverApi {
     return Map<String, dynamic>.from(d is Map ? d : {});
   }
 
-  /// Exchange driverId + email for access/refresh tokens (post-registration / post-approval).
+  /// Recover a session. Requires a valid single-use email OTP (request one via the normal
+  /// driver login send-otp flow). driverId + email alone are NOT sufficient.
   static Future<Map<String, dynamic>> bootstrapSession({
     required String driverId,
     required String email,
+    required String code,
   }) async {
     final d = await ApiClient.data('POST', '/driver/bootstrap-session', body: {
       'driverId': driverId,
       'email': email,
+      'code': code,
     }, auth: false);
     return Map<String, dynamic>.from(d is Map ? d : {});
   }

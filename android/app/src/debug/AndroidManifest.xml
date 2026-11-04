@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Local development only (http://10.0.2.2:5000). Never present in release builds. -->
+    <application
+        android:usesCleartextTraffic="true" />
 </manifest>
