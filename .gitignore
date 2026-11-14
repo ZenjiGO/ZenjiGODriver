@@ -58,3 +58,7 @@ DerivedData/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# Google Play Keystore
+/android/key.properties
+/android/driver-upload-keystore.jks
