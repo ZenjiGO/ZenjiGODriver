@@ -529,12 +529,54 @@ class _ProfileChangeRequestScreenState extends State<ProfileChangeRequestScreen>
     super.dispose();
   }
 
+  Future<String?> _askSmsCode(String number) async {
+    final ctrl = TextEditingController();
+    final s = AppScope.of(context);
+    final code = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (d) => AlertDialog(
+        title: Text(s.t('Verify new number', 'Thibitisha nambari mpya')),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(s.t('Enter the code we sent by SMS to $number.', 'Ingiza nambari tuliyotuma kwa SMS kwenda $number.')),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            maxLength: 8,
+            autofillHints: const [AutofillHints.oneTimeCode],
+            decoration: const InputDecoration(labelText: 'SMS code', counterText: ''),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: Text(s.t('Cancel', 'Ghairi'))),
+          FilledButton(onPressed: () => Navigator.pop(d, ctrl.text.trim()), child: Text(s.t('Verify', 'Thibitisha'))),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return (code == null || code.length < 4) ? null : code;
+  }
+
   Future<void> _submit() async {
     if (!(formKey.currentState?.validate() ?? false)) return;
     setState(() => sending = true);
     final s = AppScope.of(context);
     try {
-      await DriverApi.requestProfileChange(field: field, newValue: valueCtrl.text.trim(), reason: reasonCtrl.text.trim());
+      if (field == 'phone') {
+        // The new number must prove ownership by SMS before the request reaches admin.
+        final number = valueCtrl.text.trim();
+        await DriverApi.sendPhoneChangeOtp(number);
+        if (!mounted) return;
+        final code = await _askSmsCode(number);
+        if (code == null) {
+          if (mounted) setState(() => sending = false);
+          return;
+        }
+        await DriverApi.verifyPhoneChangeOtp(number, code);
+      } else {
+        await DriverApi.requestProfileChange(field: field, newValue: valueCtrl.text.trim(), reason: reasonCtrl.text.trim());
+      }
       if (!mounted) return;
       await showDialog(
         context: context,

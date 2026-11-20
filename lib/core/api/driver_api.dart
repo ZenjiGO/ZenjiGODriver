@@ -4,12 +4,22 @@ import 'api_client.dart';
 
 class DriverApi {
   /* -------------------- Auth -------------------- */
-  static Future<Map<String, dynamic>> sendOtp({String? phone, required String email, String purpose = 'login'}) async {
+  /// Sign-in code. Pass [phone] to receive it by SMS, or [email] to receive it by email.
+  static Future<Map<String, dynamic>> sendOtp({String? phone, String? email, String purpose = 'login'}) async {
+    final hasPhone = phone != null && phone.trim().isNotEmpty;
+    final hasEmail = email != null && email.trim().isNotEmpty;
+    if (!hasPhone && !hasEmail) throw Exception('Enter your phone number or email address.');
     final d = await ApiClient.data('POST', '/auth/driver/send-otp', body: {
-      if (phone != null) 'phone': phone,
-      'email': email,
+      if (hasPhone) 'phone': phone.trim(),
+      if (hasEmail && !hasPhone) 'email': email.trim().toLowerCase(),
       'purpose': purpose,
     }, auth: false);
+    return Map<String, dynamic>.from(d is Map ? d : {});
+  }
+
+  /// Registration: verify the phone number by SMS (separate from email verification).
+  static Future<Map<String, dynamic>> sendPhoneOtp(String phone) async {
+    final d = await ApiClient.data('POST', '/auth/driver/send-phone-otp', body: {'phone': phone.trim()}, auth: false);
     return Map<String, dynamic>.from(d is Map ? d : {});
   }
 
@@ -35,9 +45,10 @@ class DriverApi {
     return Map<String, dynamic>.from(d is Map ? d : {});
   }
 
-  static Future<Map<String, dynamic>> login({required String email, required String code}) async {
+  static Future<Map<String, dynamic>> login({String? email, String? phone, required String code}) async {
+    final hasPhone = phone != null && phone.trim().isNotEmpty;
     final d = await ApiClient.data('POST', '/auth/driver/login', body: {
-      'email': email,
+      if (hasPhone) 'phone': phone.trim() else 'email': (email ?? '').trim().toLowerCase(),
       'code': code,
     }, auth: false);
     return Map<String, dynamic>.from(d is Map ? d : {});
@@ -57,6 +68,7 @@ class DriverApi {
     required String vehicleColor,
     required int? modelYear,
     required String emailOtpCode,
+    String? phoneOtpCode,
     required Map<String, List<String>> files,
     Map<String, String>? expirations,
   }) async {
@@ -75,6 +87,7 @@ class DriverApi {
       'vehicleColor': vehicleColor,
       'modelYear': modelYear?.toString() ?? '',
       'emailOtpCode': emailOtpCode,
+      if (phoneOtpCode != null && phoneOtpCode.isNotEmpty) 'phoneOtpCode': phoneOtpCode,
     });
     for (final entry in files.entries) {
       for (final path in entry.value) {
@@ -332,6 +345,17 @@ class DriverApi {
       'newValue': newValue,
       if (reason != null) 'reason': reason,
     });
+    return Map<String, dynamic>.from(d is Map ? d : {});
+  }
+
+  /// Phone change: the NEW number gets an SMS code; after it is verified the change request is
+  /// created automatically and sent to ZenjiGO admin for approval.
+  static Future<void> sendPhoneChangeOtp(String phone) async {
+    await ApiClient.data('POST', '/driver/phone-change/send-otp', body: {'phone': phone.trim()});
+  }
+
+  static Future<Map<String, dynamic>> verifyPhoneChangeOtp(String phone, String code) async {
+    final d = await ApiClient.data('POST', '/driver/phone-change/verify-otp', body: {'phone': phone.trim(), 'code': code.trim()});
     return Map<String, dynamic>.from(d is Map ? d : {});
   }
 

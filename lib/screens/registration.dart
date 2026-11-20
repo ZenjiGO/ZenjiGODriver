@@ -166,6 +166,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool emailVerified = false;
   bool emailVerifying = false;
   String? emailOtpCode;
+  bool phoneVerified = false;
+  bool phoneVerifying = false;
+  String? phoneOtpCode;
+  String? verifiedPhone;
   bool acceptedTerms = false;
 
   @override
@@ -178,6 +182,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   Future<void> next() async {
     if (!(formKeys[step].currentState?.validate() ?? true)) return;
+    if (step == 0 && !phoneVerified) {
+      toast(context, AppScope.of(context).t('Verify your phone number by SMS before continuing.', 'Thibitisha namba ya simu kwa SMS kabla ya kuendelea.'));
+      return;
+    }
     if (step == 0 && !emailVerified) {
       toast(context, AppScope.of(context).t('Verify your email before continuing.', 'Thibitisha barua pepe kabla ya kuendelea.'));
       return;
@@ -257,7 +265,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         ),
       );
 
-  Widget _personal() => _wrap(0, AppScope.of(context).t('Personal details', 'Taarifa binafsi'), AppScope.of(context).t('Tell us who you are. Verify your email to continue; phone verification is not required.', 'Tuambie wewe ni nani. Thibitisha barua pepe ili kuendelea; uthibitisho wa simu hauhitajiki.'), [
+  Widget _personal() => _wrap(0, AppScope.of(context).t('Personal details', 'Taarifa binafsi'), AppScope.of(context).t('Tell us who you are. Verify your phone (SMS) and email to continue.', 'Tuambie wewe ni nani. Thibitisha simu (SMS) na barua pepe ili kuendelea.'), [
         _field(AppScope.of(context).t('Full name', 'Jina kamili'), Icons.person_outline, controller: nameController),
         const SizedBox(height: 14),
         _phoneField(),
@@ -269,7 +277,70 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         PlacesAutocompleteField(controller: addressController, label: AppScope.of(context).t('Home area / address', 'Eneo la nyumbani / anwani')),
       ]);
 
-  Widget _phoneField() => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  String get _fullPhone => '${country.dial}${phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '').replaceFirst(RegExp(r'^0+'), '')}';
+
+  Widget _phoneField() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _phoneInputRow(),
+        const SizedBox(height: 8),
+        Row(children: [
+          Icon(phoneVerified ? Icons.verified_rounded : Icons.sms_outlined, size: 18, color: phoneVerified ? Colors.green : null),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              phoneVerified
+                  ? AppScope.of(context).t('Phone verified', 'Simu imethibitishwa')
+                  : AppScope.of(context).t('We will send a code by SMS', 'Tutatuma nambari kwa SMS'),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          FilledButton.tonal(
+            onPressed: phoneVerified || phoneVerifying ? null : _verifyPhone,
+            child: phoneVerifying
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))
+                : Text(phoneVerified ? AppScope.of(context).t('Verified', 'Imethibitishwa') : AppScope.of(context).t('Verify by SMS', 'Thibitisha kwa SMS')),
+          ),
+        ]),
+      ]);
+
+  Future<void> _verifyPhone() async {
+    final local = phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    if (local.length < 7) {
+      toast(context, AppScope.of(context).t('Enter a valid phone number first.', 'Ingiza namba sahihi ya simu kwanza.'));
+      return;
+    }
+    if (phoneVerifying) return;
+    final number = _fullPhone;
+    setState(() => phoneVerifying = true);
+    try {
+      await DriverApi.sendPhoneOtp(number);
+      if (!mounted) return;
+      final code = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (d) => _OtpCodeDialog(
+          title: AppScope.of(context).t('Enter SMS code', 'Ingiza nambari ya SMS'),
+          label: AppScope.of(context).t('SMS code', 'Nambari ya SMS'),
+          cancelLabel: AppScope.of(context).t('Cancel', 'Ghairi'),
+          confirmLabel: AppScope.of(context).t('Confirm', 'Thibitisha'),
+        ),
+      );
+      if (code == null || code.isEmpty || !mounted) return;
+      await DriverApi.verifyRegistrationOtp(target: number, code: code, purpose: 'driver_registration_phone');
+      if (!mounted) return;
+      setState(() {
+        phoneOtpCode = code;
+        verifiedPhone = number;
+        phoneVerified = true;
+      });
+      toast(context, AppScope.of(context).t('Phone number verified.', 'Namba ya simu imethibitishwa.'));
+    } catch (e) {
+      if (mounted) toast(context, FriendlyErrors.message(e, swahili: AppScope.of(context).isSwahili));
+    } finally {
+      if (mounted) setState(() => phoneVerifying = false);
+    }
+  }
+
+  Widget _phoneInputRow() => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: _pickCountry,
@@ -294,11 +365,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           child: TextFormField(
             controller: phoneController,
             keyboardType: TextInputType.phone,
+            onChanged: (_) {
+              if (phoneVerified || phoneOtpCode != null) setState(() { phoneVerified = false; phoneOtpCode = null; verifiedPhone = null; });
+            },
             validator: (v) => (v == null || v.trim().isEmpty)
                 ? AppScope.of(context).t('Phone number is required', 'Namba ya simu inahitajika')
                 : null,
             decoration: InputDecoration(
-              labelText: AppScope.of(context).t('Phone number (contact only)', 'Namba ya simu (mawasiliano tu)'),
+              labelText: AppScope.of(context).t('Phone number', 'Namba ya simu'),
               hintText: '7XX XXX XXX',
               prefixIcon: const Icon(Icons.phone_outlined),
             ),
@@ -316,6 +390,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (result != null && mounted) {
       setState(() {
         country = result;
+        phoneVerified = false; phoneOtpCode = null; verifiedPhone = null;
       });
     }
   }
@@ -395,6 +470,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<void> _submitRegistration() async {
+    if(!phoneVerified || phoneOtpCode==null || verifiedPhone!=_fullPhone){toast(context,AppScope.of(context).t('Verify your phone number by SMS first.','Thibitisha namba ya simu kwa SMS kwanza.'));return;}
     if(!emailVerified || emailOtpCode==null){toast(context,AppScope.of(context).t('Verify your email first.','Thibitisha barua pepe kwanza.'));return;}
     if(emailController.text.trim().isEmpty || nationalIdController.text.trim().isEmpty || plateController.text.trim().isEmpty){toast(context,AppScope.of(context).t('Complete the required personal and vehicle fields.','Jaza taarifa zinazohitajika.'));return;}
     final requiredFiles=['license','nationalId','insurance','driverPhoto'];
@@ -402,11 +478,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (!acceptedTerms) { toast(context, AppScope.of(context).t('Please confirm the information is accurate before submitting.', 'Thibitisha kuwa taarifa ni sahihi kabla ya kutuma.')); return; }
     try{
       final result=await DriverApi.register(
-        fullName:nameController.text.trim(),phone:'${country.dial}${phoneController.text.trim()}',
+        fullName:nameController.text.trim(),phone:_fullPhone,
         email:emailController.text.trim(),nationalId:nationalIdController.text.trim(),homeAddress:addressController.text.trim(),
         vehicleType:vehicle.toLowerCase(),plateNumber:plateController.text.trim(),vehicleMake:makeController.text.trim(),
         vehicleModel:modelController.text.trim(),vehicleColor:colorController.text.trim(),modelYear:int.tryParse(yearController.text.trim()),
-        emailOtpCode:emailOtpCode!,files:selectedFiles,expirations:documentExpirations);
+        emailOtpCode:emailOtpCode!,phoneOtpCode:phoneOtpCode,files:selectedFiles,expirations:documentExpirations);
       if(!mounted)return;
       final id = result['driverId'] ?? result['driver_id'] ?? result['id'];
       // Persist auth session from registration response so profile/photo work immediately
@@ -453,7 +529,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Widget _review() => _wrap(3, AppScope.of(context).t('Review application', 'Kagua ombi'), AppScope.of(context).t('Confirm the details below before submitting for manual verification.', 'Thibitisha maelezo yaliyo hapa chini kabla ya kuwasilisha kwa uthibitisho wa mikono.'), [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
           KeyValueRow(AppScope.of(context).t('Name', 'Jina'), nameController.text.trim().isEmpty ? '—' : nameController.text.trim()),
-          KeyValueRow(AppScope.of(context).t('Phone', 'Simu'), '${country.dial} ${phoneController.text.trim()}'),
+          KeyValueRow(AppScope.of(context).t('Phone', 'Simu'), '$_fullPhone${phoneVerified ? '  ✓' : ''}'),
           KeyValueRow(AppScope.of(context).t('Email', 'Barua pepe'), emailController.text.trim().isEmpty ? '—' : emailController.text.trim()),
           KeyValueRow(AppScope.of(context).t('Vehicle', 'Gari'), '${vehicle} • ${makeController.text.trim()} ${modelController.text.trim()} • ${plateController.text.trim()}'),
           KeyValueRow(AppScope.of(context).t('Documents', 'Nyaraka'), selectedFiles.values.fold<int>(0, (sum, files) => sum + files.length).toString() + ' file(s) selected'),
