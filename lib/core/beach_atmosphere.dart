@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
 
-/// Global visual identity layer: Zanzibar lagoon, sand and tropical coast.
-/// It is deliberately a background layer so existing screens and flows remain intact.
+/// Global background layer: a calm, cool gradient with a faint brand glow at the top.
+/// (The old beach photo and decorative circles were removed: they made content harder to read.)
 class BeachAtmosphere extends StatelessWidget {
   final Widget child;
+  // Kept so existing call sites keep compiling; the photo layer is no longer drawn.
   final bool showImage;
   final double imageOpacity;
 
   const BeachAtmosphere({
     super.key,
     required this.child,
-    this.showImage = true,
-    this.imageOpacity = .14,
+    this.showImage = false,
+    this.imageOpacity = 0,
   });
 
   @override
@@ -24,67 +25,29 @@ class BeachAtmosphere extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: dark
-                  ? const [Color(0xFF06283A), Color(0xFF0B3448), Color(0xFF123A3E)]
-                  : const [Color(0xFFFDF7E9), Color(0xFFEAF9F6), Color(0xFFDDF5F4)],
-            ),
-          ),
-        ),
-        if (showImage)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: imageOpacity,
-                child: Image.asset(
-                  'assets/images/zanzibar_beach_hero.jpg',
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                  errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                ),
-              ),
-            ),
-          ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: dark
-                      ? [Colors.black.withValues(alpha: .16), Colors.transparent, Colors.black.withValues(alpha: .10)]
-                      : [Colors.white.withValues(alpha: .30), Colors.transparent, Colors.white.withValues(alpha: .12)],
-                ),
-              ),
+                  ? const [Color(0xFF0A2533), Color(0xFF071E2B), Color(0xFF061923)]
+                  : const [Color(0xFFF4F8FA), Color(0xFFF8FAFB), Color(0xFFFFFFFF)],
             ),
           ),
         ),
         Positioned(
-          top: -80,
-          right: -70,
+          top: -140,
+          left: 0,
+          right: 0,
           child: IgnorePointer(
             child: Container(
-              width: 230,
-              height: 230,
+              height: 300,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: (dark ? ZenjiColors.darkAccent : ZenjiColors.teal).withValues(alpha: .10),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: -110,
-          left: -80,
-          child: IgnorePointer(
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: ZenjiColors.sand.withValues(alpha: dark ? .08 : .20),
+                gradient: RadialGradient(
+                  radius: 0.9,
+                  colors: [
+                    (dark ? ZenjiColors.darkAccent : ZenjiColors.green).withValues(alpha: dark ? .16 : .10),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
           ),

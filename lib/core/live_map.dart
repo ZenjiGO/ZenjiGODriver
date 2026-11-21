@@ -58,6 +58,12 @@ class _LiveDriverMapState extends State<LiveDriverMap> {
   bool _didFitRoute = false; // fit the camera to the route once, then let the driver pan freely
   bool _centeredOnDriver = false;
 
+  // Demand Radar (clear map by default; the driver can switch to the radar)
+  bool _radarMode = false;
+  bool _radarLoading = false;
+  Map<String, dynamic>? _radar;
+  Timer? _radarTimer;
+
   static const gmaps.LatLng _defaultCenter = gmaps.LatLng(-6.1659, 39.2026);
 
   String t(String en, String sw) => widget.isSwahili ? sw : en;
@@ -76,6 +82,7 @@ class _LiveDriverMapState extends State<LiveDriverMap> {
   void didUpdateWidget(covariant LiveDriverMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.activeRideId != widget.activeRideId) {
+      if (widget.activeRideId != null && _radarMode) _setRadar(false);
       _didFitRoute = false;
       _routePoints = [];
       _toPickupPoints = [];
@@ -416,8 +423,199 @@ class _LiveDriverMapState extends State<LiveDriverMap> {
     return _defaultCenter;
   }
 
+  // ---- Demand Radar -----------------------------------------------------------------------------
+
+  List<Map<String, dynamic>> get _zones {
+    final z = _radar?['zones'];
+    if (z is! List) return const [];
+    return z.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<void> _loadRadar() async {
+    if (!_radarMode || _radarLoading) return;
+    setState(() => _radarLoading = true);
+    try {
+      final pos = _position;
+      final data = await DriverApi.demandZones(lat: pos?.latitude, lng: pos?.longitude);
+      if (mounted && _radarMode) setState(() => _radar = data);
+    } catch (e) {
+      if (mounted) setState(() => _mapError = FriendlyErrors.message(e, swahili: widget.isSwahili));
+    } finally {
+      if (mounted) setState(() => _radarLoading = false);
+    }
+  }
+
+  void _setRadar(bool on) {
+    _radarTimer?.cancel();
+    setState(() {
+      _radarMode = on;
+      if (!on) _radar = null;
+    });
+    if (on) {
+      _loadRadar();
+      _radarTimer = Timer.periodic(const Duration(seconds: 60), (_) => _loadRadar());
+    }
+  }
+
+  static Color _zoneColor(double i) => i >= 0.75
+      ? const Color(0xFFFF3D71)
+      : i >= 0.5
+          ? const Color(0xFFFF7A1A)
+          : i >= 0.3
+              ? const Color(0xFFFFB020)
+              : const Color(0xFFFFD66B);
+
+  /// Soft glow: three stacked translucent discs per zone, bigger and warmer where demand is higher.
+  Set<gmaps.Circle> get _zoneCircles {
+    if (!_radarMode) return const {};
+    final out = <gmaps.Circle>{};
+    var n = 0;
+    for (final z in _zones) {
+      final lat = _num(z['lat']);
+      final lng = _num(z['lng']);
+      final i = (_num(z['intensity']) ?? 0).clamp(0.0, 1.0);
+      if (lat == null || lng == null) continue;
+      final color = _zoneColor(i);
+      const layers = [(1.0, 0.10), (0.66, 0.16), (0.36, 0.24)];
+      for (var k = 0; k < layers.length; k++) {
+        out.add(gmaps.Circle(
+          circleId: gmaps.CircleId('z${n}_$k'),
+          center: gmaps.LatLng(lat, lng),
+          radius: (330 + 470 * i) * layers[k].$1,
+          fillColor: color.withValues(alpha: layers[k].$2 * (0.6 + 0.6 * i)),
+          strokeWidth: 0,
+          zIndex: k,
+        ));
+      }
+      n++;
+    }
+    return out;
+  }
+
+  String _dirName(num bearing) {
+    final en = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+    final sw = ['kaskazini', 'kaskazini mashariki', 'mashariki', 'kusini mashariki', 'kusini', 'kusini magharibi', 'magharibi', 'kaskazini magharibi'];
+    final idx = ((bearing / 45).round()) % 8;
+    return widget.isSwahili ? sw[idx] : en[idx];
+  }
+
+  Widget _modeToggle() {
+    final dark = widget.isDark;
+    Widget seg(bool radar, IconData icon, String label) {
+      final active = _radarMode == radar;
+      final activeColor = radar ? const Color(0xFFFF5A3C) : const Color(0xFF0D9488);
+      return GestureDetector(
+        onTap: () => _setRadar(radar),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? activeColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 15, color: active ? Colors.white : (dark ? Colors.white70 : Colors.black54)),
+            const SizedBox(width: 5),
+            Text(label,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: active ? Colors.white : (dark ? Colors.white70 : Colors.black54),
+                )),
+          ]),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: MapUi.panelColor(dark),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        seg(false, Icons.map_outlined, t('Clear', 'Wazi')),
+        seg(true, Icons.radar_rounded, t('Radar', 'Rada')),
+      ]),
+    );
+  }
+
+  Widget _radarPanel() {
+    final dark = widget.isDark;
+    final fg = dark ? Colors.white : Colors.black87;
+    final muted = dark ? Colors.white60 : Colors.black54;
+    final period = _radar?['period'];
+    final label = period is Map ? (period['label'] ?? '').toString() : '';
+    final best = _radar?['best'];
+    final building = (_radar?['confidence'] ?? '') == 'building';
+
+    String headline;
+    VoidCallback? go;
+    if (_radar == null) {
+      headline = t('Reading demand…', 'Inapima mahitaji…');
+    } else if (best is Map) {
+      final km = _num(best['distanceKm']) ?? 0;
+      headline = km < 0.4
+          ? t('You are in a busy zone', 'Uko katika eneo lenye abiria wengi')
+          : t('Busiest: $km km ${_dirName(_num(best['bearing']) ?? 0)}', 'Pamoja zaidi: km $km ${_dirName(_num(best['bearing']) ?? 0)}');
+      final bl = _num(best['lat']);
+      final bg = _num(best['lng']);
+      if (bl != null && bg != null) {
+        go = () => _controller?.animateCamera(gmaps.CameraUpdate.newLatLngZoom(gmaps.LatLng(bl, bg), 15));
+      }
+    } else {
+      headline = building
+          ? t('Learning your area. Zones appear as riders book.', 'Tunajifunza eneo lako. Maeneo yataonekana abiria wakiomba.')
+          : t('No busy areas right now', 'Hakuna eneo lenye shughuli sasa');
+    }
+
+    return GestureDetector(
+      onTap: go,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        constraints: const BoxConstraints(maxWidth: 270),
+        decoration: BoxDecoration(
+          color: MapUi.panelColor(dark),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.local_fire_department_rounded, size: 16, color: Color(0xFFFF5A3C)),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label.isEmpty ? t('Demand Radar', 'Rada ya Mahitaji') : label,
+                  style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
+            ),
+            if (_radarLoading) ...[
+              const SizedBox(width: 8),
+              const SizedBox(width: 11, height: 11, child: CircularProgressIndicator(strokeWidth: 2)),
+            ],
+          ]),
+          const SizedBox(height: 4),
+          Text(headline, style: TextStyle(color: muted, fontSize: 11.5, height: 1.25, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Row(children: [
+              for (final c in const [Color(0xFFFFD66B), Color(0xFFFFB020), Color(0xFFFF7A1A), Color(0xFFFF3D71)])
+                Expanded(child: Container(height: 6, color: c)),
+            ]),
+          ),
+          const SizedBox(height: 3),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(t('Quiet', 'Kimya'), style: TextStyle(color: muted, fontSize: 9.5)),
+            Text(t('Rider rush', 'Abiria wengi'), style: TextStyle(color: muted, fontSize: 9.5)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _radarTimer?.cancel();
     _locationTimer?.cancel();
     _pollTimer?.cancel();
     _controller?.dispose();
@@ -464,6 +662,7 @@ class _LiveDriverMapState extends State<LiveDriverMap> {
               },
               markers: _mapMarkers,
               polylines: _polylines,
+              circles: _zoneCircles,
               myLocationEnabled: false,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
@@ -473,7 +672,12 @@ class _LiveDriverMapState extends State<LiveDriverMap> {
               buildingsEnabled: false,
               padding: EdgeInsets.only(bottom: 8 + bottomPad * 0.1, top: 8),
             ),
+            if (widget.activeRideId == null)
+              Positioned(right: 12, top: 12, child: _modeToggle()),
+            if (_radarMode)
+              Positioned(left: 12, top: 12, child: _radarPanel()),
             // Legend
+            if (!_radarMode)
             Positioned(
               left: 12,
               top: 12,

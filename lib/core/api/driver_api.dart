@@ -167,6 +167,13 @@ class DriverApi {
   }
 
   /// The driver's unfinished ride (accepted … started), or null. Used to resume after an app restart.
+  /// Demand Radar: where riders are most likely to request a trip right now (zones + the best one to head to).
+  static Future<Map<String, dynamic>> demandZones({double? lat, double? lng}) async {
+    final q = (lat != null && lng != null) ? '?lat=$lat&lng=$lng' : '';
+    final d = await ApiClient.data('GET', '/driver/demand-zones$q');
+    return d is Map ? Map<String, dynamic>.from(d) : <String, dynamic>{};
+  }
+
   static Future<Map<String, dynamic>?> activeRide() async {
     final d = await ApiClient.data('GET', '/driver/rides/active');
     final r = d is Map ? d['ride'] : null;

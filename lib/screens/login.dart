@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/otp_autofill.dart';
 import '../core/app_state.dart';
 import '../core/friendly_errors.dart';
 import '../core/api/driver_api.dart';
@@ -36,6 +37,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
     email.dispose();
     phone.dispose();
     otp.dispose();
+    OtpAutofill.stop();
     timer?.cancel();
     super.dispose();
   }
@@ -72,6 +74,11 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
         currentPhone = number;
         if (!mounted) return;
         setState(() => sent = true);
+        OtpAutofill.listen((code) {
+          if (!mounted || !sent) return;
+          otp.text = code;
+          verify();
+        });
         start();
         toast(context, AppScope.of(context).t('Code sent by SMS to $number.', 'Nambari imetumwa kwa SMS kwenda $number.'));
       } else {

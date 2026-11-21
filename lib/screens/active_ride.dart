@@ -648,11 +648,17 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
     }
   }
 
+  /// Set when the rider booked this trip for someone else: the driver calls that passenger, chats with the booker.
+  Map<String, dynamic>? get _passenger {
+    final p = _field('passenger') ?? _ride?['passenger'];
+    return p is Map ? Map<String, dynamic>.from(p) : null;
+  }
+
   void _openChat() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatScreen(name: _s('rider_name', 'Rider'), support: false, rideId: widget.rideId),
+        builder: (_) => ChatScreen(name: _passenger != null ? t('Person who booked', 'Aliyeomba safari') : _s('rider_name', 'Rider'), support: false, rideId: widget.rideId),
       ),
     );
   }
@@ -919,6 +925,9 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(rider, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                        if (_passenger != null)
+                          Text(t('Passenger · booked by someone else', 'Abiria · ameombewa na mtu mwingine'),
+                              style: const TextStyle(fontSize: 12, color: ZenjiColors.green, fontWeight: FontWeight.w800)),
                         Text(
                           '${_s('ride_type', 'ride').toUpperCase()} · ${_payMethod.toUpperCase()}',
                           style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w700),
@@ -932,6 +941,8 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
                   const SizedBox(height: 12),
                   _routeRow(Icons.radio_button_checked, ZenjiColors.green, t('Pickup', 'Kuchukua'), _s('pickup_address'), isDark),
                   _routeRow(Icons.location_on_rounded, Colors.deepOrange, t('Drop-off', 'Kushusha'), _s('destination_address'), isDark),
+                  if ((_passenger?['note'] ?? '').toString().isNotEmpty)
+                    _routeRow(Icons.sticky_note_2_outlined, ZenjiColors.green, t('Note', 'Ujumbe'), '${_passenger!['note']}', isDark),
                   const SizedBox(height: 8),
                   Row(children: [
                     _stat(t('Fare', 'Nauli'), _tzs(_amountDue), isDark),

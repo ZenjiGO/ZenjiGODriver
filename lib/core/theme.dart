@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 /// Zanzibar coastal palette shared by the entire Driver app.
 class ZenjiColors {
   // Evening ocean
-  static const darkBg = Color(0xFF06283A);
+  static const darkBg = Color(0xFF071E2B);
   static const darkAccent = Color(0xFF31D0C6);
   static const skyBlue = Color(0xFF45B9E8);
   static const darkText = Color(0xFFF7FBFA);
@@ -13,7 +13,7 @@ class ZenjiColors {
   static const darkHighlight = Color(0xFFF39A5A);
 
   // Daylight / sand / lagoon
-  static const lightBg = Color(0xFFFDF7E9);
+  static const lightBg = Color(0xFFF4F8FA);
   static const lightNavy = Color(0xFF073B4C);
   static const teal = Color(0xFF008F91);
   static const charcoal = Color(0xFF20363D);
@@ -32,8 +32,8 @@ class ZenjiTheme {
         text: ZenjiColors.darkText,
         primary: ZenjiColors.darkAccent,
         secondary: ZenjiColors.skyBlue,
-        card: const Color(0xE61A4B58),
-        field: const Color(0xD9133D4C),
+        card: const Color(0xFF143847),
+        field: const Color(0xFF10303F),
       );
 
   static ThemeData light() => _theme(
@@ -42,8 +42,8 @@ class ZenjiTheme {
         text: ZenjiColors.charcoal,
         primary: ZenjiColors.teal,
         secondary: ZenjiColors.coral,
-        card: const Color(0xF7FFFFFF),
-        field: const Color(0xEFFFFFFF),
+        card: const Color(0xFFFFFFFF),
+        field: const Color(0xFFF1F5F8),
       );
 
   static ThemeData _theme({
@@ -84,12 +84,12 @@ class ZenjiTheme {
         bodyColor: text,
         displayColor: text,
       ).copyWith(
-        displayLarge: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700, color: text),
-        displayMedium: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700, color: text),
-        displaySmall: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700, color: text),
-        headlineLarge: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700, color: text),
-        headlineMedium: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700, color: text),
-        headlineSmall: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700, color: text),
+        displayLarge: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        displayMedium: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        displaySmall: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        headlineLarge: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        headlineMedium: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
+        headlineSmall: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: text),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -98,7 +98,7 @@ class ZenjiTheme {
         scrolledUnderElevation: 0,
         centerTitle: true,
         systemOverlayStyle: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-        titleTextStyle: GoogleFonts.playfairDisplay(
+        titleTextStyle: GoogleFonts.poppins(
           color: text,
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -110,7 +110,10 @@ class ZenjiTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: dark ? Colors.black26 : ZenjiColors.lightNavy.withValues(alpha: .10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: dark ? Colors.white.withValues(alpha: .07) : ZenjiColors.lightNavy.withValues(alpha: .07)),
+        ),
         margin: EdgeInsets.zero,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -178,7 +181,7 @@ class ZenjiTheme {
         backgroundColor: card,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-        titleTextStyle: GoogleFonts.playfairDisplay(fontSize: 21, fontWeight: FontWeight.w700, color: text),
+        titleTextStyle: GoogleFonts.poppins(fontSize: 21, fontWeight: FontWeight.w700, color: text),
         contentTextStyle: GoogleFonts.poppins(fontSize: 14, color: text),
       ),
       bottomSheetTheme: BottomSheetThemeData(

@@ -1,7 +1,7 @@
 name: zenjigodriver
 description: "RIDE EASE frontend application."
 publish_to: 'none'
-version: 0.1.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ^3.10.4
@@ -16,6 +16,7 @@ dependencies:
   shared_preferences: ^2.3.2
   flutter_secure_storage: ^9.2.2
   url_launcher: ^6.3.0
+  sms_autofill: ^2.4.1
   file_picker: ^8.1.2
   firebase_core: ^3.8.1
   firebase_messaging: ^15.1.5
