@@ -57,7 +57,7 @@ class DirectionsService {
 
   static const String defaultKey = String.fromEnvironment(
     'GOOGLE_MAPS_API_KEY',
-    defaultValue: 'AIzaSyBX93zeEULXrhxlvkNefmoFcYDGizvvSpU',
+    defaultValue: 'AIzaSyBEK72L5OoeRUS9uZsETgfirTcZWQkwfyY',
   );
 
   static final Map<String, RouteResult> _cache = {};
