@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/app_state.dart';
+import '../core/format.dart';
 import '../core/api/driver_api.dart';
 import '../core/live_map.dart';
 import '../core/theme.dart';
@@ -20,6 +21,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _lastPromptedRequestId;
   bool _prompting = false;
   Timer? _requestTimer;
+  Timer? _statsTimer;
+  num _todayEarned = 0;
+  int _todayTrips = 0;
 
   @override
   void initState() {
@@ -34,11 +38,32 @@ class _HomeScreenState extends State<HomeScreen> {
       if (state.online) state.startRidePolling();
       _resumeActiveRide(state);
     });
+    _loadTodayStats();
+    _statsTimer = Timer.periodic(const Duration(seconds: 60), (_) => _loadTodayStats());
     _requestTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       final state = AppScope.of(context);
       if (state.online && !_prompting) _showRideRequest();
     });
+  }
+
+  /// Today's earnings + trips, taken from the earnings ledger (the finance endpoint does not carry them).
+  Future<void> _loadTodayStats() async {
+    try {
+      final e = await DriverApi.earnings();
+      final days = e['days'] is List ? List<dynamic>.from(e['days'] as List) : <dynamic>[];
+      num earned = 0;
+      int trips = 0;
+      for (final d in days) {
+        if (d is! Map) continue;
+        if (Fmt.dayLabel(d['day'], today: '#today', yesterday: '#y') == '#today') {
+          earned += Fmt.parse(d['driver_share'] ?? d['driverShare']);
+          trips += Fmt.parse(d['rides']).toInt();
+        }
+      }
+      if (!mounted) return;
+      setState(() { _todayEarned = earned; _todayTrips = trips; });
+    } catch (_) {}
   }
 
   /// App was restarted / reinstalled while a ride was unfinished: put the driver straight back into it.
@@ -59,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _requestTimer?.cancel();
+    _statsTimer?.cancel();
     super.dispose();
   }
 
@@ -164,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Expanded(
                 child: ListView(
-                  padding: EdgeInsets.fromLTRB(isNarrow ? 12 : 18, 0, isNarrow ? 12 : 18, 20),
+                  padding: EdgeInsets.fromLTRB(isNarrow ? 12 : 18, 0, isNarrow ? 12 : 18, state.online ? 24 : 110),
                   children: [
                     LiveDriverMap(
                       height: MediaQuery.sizeOf(context).height < 700 ? 240 : 360,
@@ -177,9 +203,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        Expanded(child: _stat(Icons.payments_outlined, state.t('Today', 'Leo'), 'TZS ${state.finance?['todayEarnings'] ?? state.finance?['today_earnings'] ?? 0}')),
+                        Expanded(child: _stat(Icons.payments_outlined, state.t('Today', 'Leo'), Fmt.tzs(_todayEarned))),
                         const SizedBox(width: 8),
-                        Expanded(child: _stat(Icons.route_outlined, state.t('Trips', 'Safari'), '${state.finance?['todayTrips'] ?? state.finance?['today_trips'] ?? 0}')),
+                        Expanded(child: _stat(Icons.route_outlined, state.t('Trips', 'Safari'), '$_todayTrips')),
                         const SizedBox(width: 8),
                         Expanded(child: _stat(Icons.star_rounded, state.t('Rating', 'Ukadiriaji'), '${state.profile?['rating'] ?? '—'}')),
                       ],
@@ -248,12 +274,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _stat(IconData icon, String label, String value) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         child: Column(
           children: [
             Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
-            const SizedBox(height: 6),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13), overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 8),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14), overflow: TextOverflow.ellipsis),
             Text(
               label,
               style: TextStyle(
@@ -373,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Divider(height: 28),
                   Row(
                     children: [
-                      Expanded(child: _info(state.t('Estimated fare', 'Nauli inayokadiriwa'), 'TZS $fare')),
+                      Expanded(child: _info(state.t('Estimated fare', 'Nauli inayokadiriwa'), Fmt.tzs(Fmt.parse(fare)))),
                       Expanded(child: _info(state.t('Ride type', 'Aina ya safari'), '${request['rideType'] ?? request['ride_type'] ?? '—'}')),
                       Expanded(child: _info(state.t('Status', 'Hali'), '${request['status'] ?? 'Requested'}')),
                     ],
@@ -442,42 +468,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSettlementRequired(Map<String, dynamic> data) {
     final appScope = AppScope.of(context);
-    final messenger = ScaffoldMessenger.maybeOf(context);
     showDialog(
       context: context,
       builder: (d) => AlertDialog(
         title: Text(appScope.t('Settlement required', 'Malipo yanahitajika')),
         content: Text(
           appScope.t(
-            'You have reached the TZS ${data['threshold'] ?? 60000} earning threshold. Amount owed to ZenjiGO: TZS ${data['commissionOwed'] ?? 0}. Settle the balance before accepting new rides.',
-            'Umefikia kiwango cha TZS ${data['threshold'] ?? 60000}. Deni kwa ZenjiGO: TZS ${data['commissionOwed'] ?? 0}. Lipa deni kabla ya kukubali safari mpya.',
+            'You have reached the ${Fmt.tzs(Fmt.parse(data['threshold'] ?? 60000))} earning threshold. Amount owed to ZenjiGO: ${Fmt.tzs(Fmt.parse(data['commissionOwed'] ?? 0))}. Settle the balance before accepting new rides.',
+            'Umefikia kiwango cha ${Fmt.tzs(Fmt.parse(data['threshold'] ?? 60000))}. Deni kwa ZenjiGO: ${Fmt.tzs(Fmt.parse(data['commissionOwed'] ?? 0))}. Lipa deni kabla ya kukubali safari mpya.',
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(d), child: Text(appScope.t('Close', 'Funga'))),
           FilledButton(
-            onPressed: () async {
+            onPressed: () {
               Navigator.pop(d);
-              try {
-                await DriverApi.settle();
-                await appScope.refreshFinance();
-                if (mounted && messenger != null) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(appScope.t(
-                      'Settlement created. Complete the payment through your provider.',
-                      'Malipo yameanzishwa. Kamilisha kupitia mtoa huduma wako.',
-                    ))),
-                  );
-                }
-              } catch (e) {
-                if (mounted && messenger != null) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(FriendlyErrors.message(e, swahili: appScope.isSwahili))),
-                  );
-                }
-              }
+              appScope.setNav(1);
             },
-            child: Text(appScope.t('Start settlement', 'Anza malipo')),
+            child: Text(appScope.t('Go to payment', 'Nenda kulipa')),
           ),
         ],
       ),

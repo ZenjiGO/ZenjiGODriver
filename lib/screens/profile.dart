@@ -141,18 +141,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ]),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 24),
             SectionTitle(s.t('Driver account', 'Akaunti ya dereva')),
             _tile(context, Icons.person_outline, s.t('Personal & vehicle details', 'Taarifa binafsi na za gari'),
-                s.t('View details returned by your account', 'Angalia taarifa za akaunti yako'),
+                s.t('Your name, contact and vehicle information', 'Jina, mawasiliano na taarifa za gari lako'),
                 () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverDetailsScreen()))),
             _tile(context, Icons.star_outline, s.t('Ratings & reviews', 'Ukadiriaji na maoni'),
-                '$rating average • $reviewCount reviews',
+                s.t('$rating average • $reviewCount reviews', 'Wastani $rating • maoni $reviewCount'),
                 () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewsScreen()))),
             _tile(context, Icons.description_outlined, s.t('Documents', 'Nyaraka'),
                 s.t('Preview documents and expiry dates', 'Angalia nyaraka na tarehe za mwisho'),
                 () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()))),
-            const SizedBox(height: 18),
+            const SizedBox(height: 24),
             SectionTitle(s.t('Request information updates', 'Omba masasisho ya taarifa')),
             _tile(context, Icons.edit_note_outlined, s.t('Update profile info', 'Sasisha taarifa za wasifu'),
                 s.t('Name, phone, email, address — admin approval required', 'Jina, simu, barua pepe, anwani — inahitaji idhini'),
@@ -166,10 +166,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _tile(context, Icons.history, s.t('My change requests', 'Maombi yangu ya mabadiliko'),
                 s.t('Track pending, updated or rejected requests', 'Fuatilia maombi yanayosubiri, yaliyosasishwa au yaliyokataliwa'),
                 () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangeRequestsListScreen()))),
-            const SizedBox(height: 18),
+            const SizedBox(height: 24),
             SectionTitle(s.t('Preferences & safety', 'Mapendeleo na usalama')),
             Card(
-              margin: const EdgeInsets.only(bottom: 9),
+              margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: .12),
@@ -219,9 +219,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _tile(BuildContext c, IconData i, String t, String sub, VoidCallback tap) => Card(
-        margin: const EdgeInsets.only(bottom: 9),
+        margin: const EdgeInsets.only(bottom: 12),
         child: ListTile(
           onTap: tap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           leading: CircleAvatar(
             backgroundColor: Theme.of(c).colorScheme.primary.withValues(alpha: .12),
             child: Icon(i, color: Theme.of(c).colorScheme.primary),

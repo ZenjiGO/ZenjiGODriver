@@ -283,6 +283,17 @@ class DriverApi {
     return Map<String, dynamic>.from(d is Map ? d : {});
   }
 
+  /// Withdrawable balance + the driver's payout-request history.
+  /// Returns null when the server is an older build without this endpoint.
+  static Future<Map<String, dynamic>?> payouts() async {
+    try {
+      final d = await ApiClient.data('GET', '/driver/payouts');
+      return d is Map ? Map<String, dynamic>.from(d) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /* -------------------- Chat -------------------- */
   static Future<List<dynamic>> conversations() async {
     final d = await ApiClient.data('GET', '/driver/chat');
